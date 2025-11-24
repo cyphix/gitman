@@ -1,0 +1,158 @@
+#!/bin/bash
+
+GITMAN_DATA="$HOME/.git_man"
+REGISTRY_FILE=".repo_registry"
+REGISTRY="$GITMAN_DATA/$REGISTRY_FILE"
+
+mkdir -p "$GITMAN_DATA"
+touch "$REGISTRY"
+
+if ! command -v dialog &> /dev/null; then
+    echo "Error: 'dialog' is not installed. Install it with:"
+    echo "  sudo apt install dialog    (Debian/Ubuntu)"
+    echo "  sudo yum install dialog    (RHEL/CentOS)"
+    exit 1
+fi
+
+add_repo() {
+    name=$(dialog --inputbox "Enter repository name:" 8 50 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ] || [ -z "$name" ]; then
+        return
+    fi
+    
+    path=$(dialog --inputbox "Enter repository path:" 8 50 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ] || [ -z "$path" ]; then
+        return
+    fi
+    
+    if ! [ -d "$path/.git" ]; then
+        dialog --msgbox "Error: $path is not a git repository" 6 50
+        return
+    fi
+    
+    if grep -q "^$name:" "$REGISTRY"; then
+        dialog --msgbox "Error: Repository name '$name' already exists" 6 50
+        return
+    fi
+    
+    echo "$name:$path" >> "$REGISTRY"
+    dialog --msgbox "Added repository '$name' -> $path" 6 50
+}
+
+list_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        dialog --msgbox "No repositories registered" 6 40
+        return
+    fi
+    
+    repos=""
+    while IFS=: read -r name path; do
+        repos="$repos$name -> $path\n"
+    done < "$REGISTRY"
+    
+    dialog --msgbox "Registered repositories:\n\n$repos" 20 70
+}
+
+remove_repo() {
+    if [ ! -s "$REGISTRY" ]; then
+        dialog --msgbox "No repositories registered" 6 40
+        return
+    fi
+    
+    menu_items=()
+    while IFS=: read -r name path; do
+        menu_items+=("$name" "$path")
+    done < "$REGISTRY"
+    
+    name=$(dialog --menu "Select repository to remove:" 15 70 8 "${menu_items[@]}" 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ] || [ -z "$name" ]; then
+        return
+    fi
+    
+    dialog --yesno "Remove repository '$name'?" 6 40
+    if [ $? -eq 0 ]; then
+        sed -i "/^$name:/d" "$REGISTRY"
+        dialog --msgbox "Removed repository '$name'" 6 40
+    fi
+}
+
+pull_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        dialog --msgbox "No repositories registered" 6 40
+        return
+    fi
+    
+    output=$(mktemp)
+    {
+        echo "Pulling all repositories..."
+        echo ""
+        while IFS=: read -r name path; do
+            echo "=== Pulling $name ($path) ==="
+            if [ -d "$path/.git" ]; then
+                (cd "$path" && git pull 2>&1)
+            else
+                echo "Warning: $path is not a valid git repository"
+            fi
+            echo ""
+        done < "$REGISTRY"
+    } > "$output" 2>&1
+    
+    dialog --textbox "$output" 20 80
+    rm "$output"
+}
+
+push_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        dialog --msgbox "No repositories registered" 6 40
+        return
+    fi
+    
+    output=$(mktemp)
+    {
+        echo "Pushing all repositories..."
+        echo ""
+        while IFS=: read -r name path; do
+            echo "=== Pushing $name ($path) ==="
+            if [ -d "$path/.git" ]; then
+                (cd "$path" && git push 2>&1)
+            else
+                echo "Warning: $path is not a valid git repository"
+            fi
+            echo ""
+        done < "$REGISTRY"
+    } > "$output" 2>&1
+    
+    dialog --textbox "$output" 20 80
+    rm "$output"
+}
+
+while true; do
+    choice=$(dialog --clear --title "GitMan - Git Manager" \
+        --menu "Choose an option:" 15 50 6 \
+        1 "Add repository" \
+        2 "List repositories" \
+        3 "Remove repository" \
+        4 "Pull all repositories" \
+        5 "Push all repositories" \
+        6 "Exit" \
+        3>&1 1>&2 2>&3)
+    
+    exit_status=$?
+    clear
+    
+    if [ $exit_status -ne 0 ]; then
+        break
+    fi
+    
+    case $choice in
+        1) add_repo ;;
+        2) list_repos ;;
+        3) remove_repo ;;
+        4) pull_repos ;;
+        5) push_repos ;;
+        6) break ;;
+    esac
+done
+
+clear
+echo "Goodbye!"
