@@ -35,4 +35,7 @@ Navigate the menu with arrow keys and Enter:
 - **Pull all repositories**: Run `git pull` on all registered repos
 - **Push all repositories**: Run `git push` on all registered repos
 
-Registry stored in `~/.git_man/.repo_registry`
+## Config File
+
+The registry is stored at `~/.git_man/.repo_registry` with one entry per line.
+The format if <name>:<file_path>
