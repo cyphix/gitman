@@ -22,7 +22,7 @@ sudo yum install dialog    # RHEL/CentOS
 
 ## Usage
 
-Run the script:
+Run without arguments to open the interactive menu:
 ```bash
 ./gitman                   # or just 'gitman' if in PATH
 ```
@@ -35,7 +35,18 @@ Navigate the menu with arrow keys and Enter:
 - **Pull all repositories**: Run `git pull` on all registered repos
 - **Push all repositories**: Run `git push` on all registered repos
 
+## CLI Options
+
+```bash
+gitman --help                            # Show help
+gitman --list                            # List all registered repos
+gitman --pull                            # Pull all registered repos
+gitman --push                            # Push all registered repos
+gitman --repo add <name> </path>         # Register a repo
+gitman --repo remove <name>              # Unregister a repo
+```
+
 ## Config File
 
 The registry is stored at `~/.git_man/.repo_registry` with one entry per line.
-The format if <name>:<file_path>
+The format is `<name>:<file_path>`.
