@@ -7,6 +7,143 @@ REGISTRY="$GITMAN_DATA/$REGISTRY_FILE"
 mkdir -p "$GITMAN_DATA"
 touch "$REGISTRY"
 
+show_help() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+GitMan - A terminal UI for managing multiple git repositories.
+
+Options:
+  --help                          Show this help message and exit
+  --pull                          Pull all registered repositories and exit
+  --push                          Push all registered repositories and exit
+  --list                          List all registered repositories and exit
+  --repo add <name> <path>        Register a new repository
+  --repo remove <name>            Unregister a repository
+
+Without options, GitMan launches the interactive dialog menu.
+
+Data:
+  Registry file: $REGISTRY
+
+EOF
+    exit 0
+}
+
+cli_pull_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        echo "No repositories registered."
+        exit 0
+    fi
+
+    echo "Pulling all repositories..."
+    echo ""
+    while IFS=: read -r name path; do
+        echo "=== Pulling $name ($path) ==="
+        if [ -d "$path/.git" ]; then
+            (cd "$path" && git pull 2>&1)
+        else
+            echo "Warning: $path is not a valid git repository"
+        fi
+        echo ""
+    done < "$REGISTRY"
+    exit 0
+}
+
+cli_push_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        echo "No repositories registered."
+        exit 0
+    fi
+
+    echo "Pushing all repositories..."
+    echo ""
+    while IFS=: read -r name path; do
+        echo "=== Pushing $name ($path) ==="
+        if [ -d "$path/.git" ]; then
+            (cd "$path" && git push 2>&1)
+        else
+            echo "Warning: $path is not a valid git repository"
+        fi
+        echo ""
+    done < "$REGISTRY"
+    exit 0
+}
+
+cli_list_repos() {
+    if [ ! -s "$REGISTRY" ]; then
+        echo "No repositories registered."
+        exit 0
+    fi
+
+    echo "Registered repositories:"
+    echo ""
+    while IFS=: read -r name path; do
+        echo "  $name -> $path"
+    done < "$REGISTRY"
+    exit 0
+}
+
+# Argument parsing
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help) show_help ;;
+        --pull) cli_pull_repos ;;
+        --push) cli_push_repos ;;
+        --list) cli_list_repos ;;
+        --repo)
+            subcmd="$2"
+            case "$subcmd" in
+                add)
+                    repo_name="$3"
+                    repo_path="$4"
+                    if [ -z "$repo_name" ] || [ -z "$repo_path" ]; then
+                        echo "Usage: $(basename "$0") --repo add \"<name>\" \"<path>\""
+                        exit 1
+                    fi
+                    if ! [ -d "$repo_path/.git" ]; then
+                        echo "Error: $repo_path is not a git repository"
+                        exit 1
+                    fi
+                    if grep -q "^$repo_name:" "$REGISTRY"; then
+                        echo "Error: Repository name '$repo_name' already exists"
+                        exit 1
+                    fi
+                    echo "$repo_name:$repo_path" >> "$REGISTRY"
+                    echo "Added repository '$repo_name' -> $repo_path"
+                    exit 0
+                    ;;
+                remove)
+                    repo_name="$3"
+                    if [ -z "$repo_name" ]; then
+                        echo "Usage: $(basename "$0") --repo remove \"<name>\""
+                        exit 1
+                    fi
+                    if ! grep -q "^$repo_name:" "$REGISTRY"; then
+                        echo "Error: Repository '$repo_name' not found"
+                        exit 1
+                    fi
+                    sed -i "/^$repo_name:/d" "$REGISTRY"
+                    echo "Removed repository '$repo_name'"
+                    exit 0
+                    ;;
+                *)
+                    echo "Unknown --repo command: '$subcmd'"
+                    echo "Valid commands: add, remove"
+                    echo "Run '$(basename "$0") --help' for usage."
+                    exit 1
+                    ;;
+            esac
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Run '$(basename "$0") --help' for usage."
+            exit 1
+            ;;
+    esac
+    shift
+done
+
 if ! command -v dialog &> /dev/null; then
     echo "Error: 'dialog' is not installed. Install it with:"
     echo "  sudo apt install dialog    (Debian/Ubuntu)"
